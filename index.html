@@ -1,0 +1,333 @@
+<title>Tramboard</title>
+<meta name="theme-color" content="#16181a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Doto:wght@700;900&family=Inter+Tight:wght@400;500;600&display=swap">
+<style>
+  /* The board itself copies the amber LED passenger displays at VBZ stops
+     (line, destination, ">" for delays, minutes, live tick). Only the room around it follows the theme. */
+  :root {
+    --room: #d9dcdf;
+    --room-ink: #24282c;
+    --room-muted: #62696f;
+    --room-line: #c3c7cb;
+    --field: #eef0f2;
+    --housing: #1b1d1f;
+    --glass: #050505;
+    --led: #ffa31a;
+    --led-dim: rgba(255, 163, 26, .38);
+    --led-off: rgba(255, 163, 26, .07);
+    --led-font: "Doto", "Courier New", ui-monospace, monospace;
+    --ui: "Inter Tight", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { color-scheme: dark; --room: #121314; --room-ink: #e4e6e8; --room-muted: #8b9196; --room-line: #2a2d30; --field: #1b1d1f; --housing: #202326; }
+  }
+  :root[data-theme="dark"] { color-scheme: dark; --room: #121314; --room-ink: #e4e6e8; --room-muted: #8b9196; --room-line: #2a2d30; --field: #1b1d1f; --housing: #202326; }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--room); color: var(--room-ink); font: 15px/1.5 var(--ui); }
+  .page { max-width: 820px; margin: 0 auto; padding-inline: 16px; padding-block: 32px 48px; display: grid; gap: 28px; }
+
+  /* ---- the device ---- */
+  .boards { display: grid; gap: 22px; }
+  .device { background: var(--housing); border-radius: 14px; padding: 14px; box-shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 18px 40px -22px rgba(0,0,0,.55); }
+  .screen {
+    --dot: clamp(3px, .55vw, 4px);
+    background-color: var(--glass);
+    /* unlit LED grid */
+    background-image: radial-gradient(circle at center, var(--led-off) 0 42%, transparent 46%);
+    background-size: var(--dot) var(--dot);
+    border-radius: 4px;
+    padding: 12px 14px;
+    color: var(--led);
+    font-family: var(--led-font);
+    font-weight: 900;
+    font-size: clamp(20px, 5.2vw, 32px);
+    line-height: 1.22;
+    text-shadow: 0 0 6px rgba(255, 150, 0, .45);
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+  }
+  .l { display: grid; grid-template-columns: 2.7em minmax(0, 1fr) .8em 2.3em .5em; column-gap: .35em; align-items: center; white-space: nowrap; }
+  .l .dest { overflow: hidden; text-overflow: clip; }
+  .l .late, .l .min, .l .tick { text-align: right; }
+  .l .tick { text-align: left; }
+  .l .tick.sched { color: var(--led-dim); }
+  .l .min svg { height: .8em; width: auto; vertical-align: -.05em; fill: currentColor; }
+  .line { text-align: center; border-radius: 2px; font-size: .92em; line-height: 1.12; padding-top: .04em; }
+  .classic .line { background: none !important; color: var(--led) !important; text-align: left; }
+  .head, .foot { display: flex; justify-content: space-between; gap: 1em; font-weight: 700; font-size: .62em; color: var(--led-dim); white-space: nowrap; }
+  .head { margin-bottom: .45em; }
+  .foot { margin-top: .45em; }
+  .head span:first-child, .foot span:first-child { overflow: hidden; text-overflow: clip; }
+  .foot .go { color: var(--led); }
+  .blink { animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .blink { animation: none; } }
+  .msg { font-size: .7em; padding-block: .6em; }
+
+  /* ---- controls around the device: quiet, like a settings page ---- */
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; color: var(--room-muted); font-size: 13px; }
+  .bar .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  button { font: 500 14px var(--ui); color: var(--room-ink); background: transparent; border: 1px solid var(--room-line); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+  button:hover { background: var(--field); }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--led); outline-offset: 2px; }
+  .note { font-size: 13px; color: var(--room-muted); border-left: 2px solid var(--led); padding: 2px 0 2px 12px; }
+
+  dialog { background: var(--room); color: var(--room-ink); border: 1px solid var(--room-line); border-radius: 10px; width: min(600px, calc(100% - 32px)); padding: 0; }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  .dlg { padding: 20px; display: grid; gap: 18px; max-height: 85vh; overflow: auto; }
+  .dlg h3 { margin: 0; font-size: 18px; font-weight: 600; }
+  .section { display: grid; gap: 10px; padding-top: 14px; border-top: 1px solid var(--room-line); }
+  .section .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .section strong { font-weight: 600; }
+  .section .top button { padding: 4px 10px; font-size: 13px; }
+  label { font-size: 13px; color: var(--room-muted); display: grid; gap: 4px; }
+  input, select { font: 15px var(--ui); color: var(--room-ink); background: var(--field); border: 1px solid var(--room-line); border-radius: 6px; padding: 7px 9px; width: 100%; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+  .checks { display: flex; gap: 14px; flex-wrap: wrap; }
+  .checks label { display: flex; align-items: center; gap: 6px; color: var(--room-ink); font-size: 14px; cursor: pointer; }
+  .checks input { width: auto; accent-color: var(--led); }
+  .results { display: grid; gap: 4px; }
+  .results button { text-align: left; border: 0; border-radius: 6px; }
+  .end { display: flex; justify-content: flex-end; }
+
+  body.kiosk { background: #000; }
+  body.kiosk .bar, body.kiosk .note { display: none; }
+  body.kiosk .page { max-width: none; padding-block: 16px; }
+  body.kiosk .device { background: #000; padding: 0; box-shadow: none; }
+  body.kiosk .screen { font-size: clamp(22px, 5vw, 64px); }
+</style>
+
+<div class="page">
+  <div class="note" id="note" hidden></div>
+  <main class="boards" id="boards"></main>
+  <div class="bar">
+    <span id="status">Loading…</span>
+    <div class="actions">
+      <button id="btn-settings" type="button">Stops &amp; filters</button>
+      <button id="btn-kiosk" type="button">Full screen</button>
+    </div>
+  </div>
+</div>
+
+<dialog id="dlg">
+  <form class="dlg" method="dialog">
+    <h3>Stops &amp; filters</h3>
+    <label for="q">Add a stop
+      <input id="q" type="search" placeholder="e.g. Zürich, Bellevue" autocomplete="off">
+    </label>
+    <div class="results" id="results"></div>
+    <div class="checks"><label><input type="checkbox" id="opt-classic"> Classic amber line numbers (no colours)</label></div>
+    <div id="cfg-list" style="display:grid;gap:14px"></div>
+    <div class="end"><button type="submit">Done</button></div>
+  </form>
+</dialog>
+
+<script>
+const API = "https://transport.opendata.ch/v1";
+const TYPES = [["tram","Tram"],["bus","Bus"],["train","Train"],["ship","Boat"],["cableway","Cableway"]];
+// VBZ tram line colours (approximate). Other lines use plain amber.
+const LINE_COLORS = {
+  "2":["#e3000b","#fff"],"3":["#00a04b","#fff"],"4":["#2a2a86","#fff"],"5":["#8d5b2d","#fff"],
+  "6":["#d99f58","#000"],"7":["#000","#fff"],"8":["#a6c93d","#000"],"9":["#4d3b8f","#fff"],
+  "10":["#e4007d","#fff"],"11":["#00a04b","#fff"],"12":["#7fcfe3","#000"],"13":["#ffd200","#000"],
+  "14":["#0096d6","#fff"],"15":["#e3000b","#fff"],"17":["#9c2a5c","#fff"]
+};
+const TRAM_ICON = `<svg viewBox="0 0 14 12" aria-label="departing"><rect x="1" y="2" width="12" height="7" rx="1"/><rect x="3" y="0" width="8" height="1"/><rect x="2" y="10" width="3" height="2"/><rect x="9" y="10" width="3" height="2"/></svg>`;
+const DEFAULT_CONFIG = { classic: false, stops: [
+  { id: "8588078", name: "Zürich, Central", types: ["tram","bus"], lines: "", dest: "", walk: 0, limit: 6 }
+]};
+
+let config = load();
+let boards = {};
+let lastHtml = "";
+
+function load() {
+  try { const c = JSON.parse(localStorage.getItem("tramboard")); if (c && Array.isArray(c.stops)) return c; } catch (e) {}
+  return structuredClone(DEFAULT_CONFIG);
+}
+function save() { try { localStorage.setItem("tramboard", JSON.stringify(config)); } catch (e) {} }
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad = n => String(n).padStart(2, "0");
+const hhmm = t => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const shortName = s => s.replace(/^Zürich,\s*/, "");
+
+async function fetchStop(stop) {
+  const p = new URLSearchParams({ id: stop.id, limit: String(Math.max(stop.limit * 3, 24)) });
+  stop.types.forEach(t => p.append("transportations[]", t));
+  const r = await fetch(`${API}/stationboard?${p}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const j = await r.json();
+  return (j.stationboard || []).map(e => {
+    const planned = e.stop.departureTimestamp * 1000;
+    const pg = e.stop.prognosis || e.prognosis;
+    const prog = pg && pg.departure ? Date.parse(pg.departure) : null;
+    const delay = e.stop.delay || 0;
+    return {
+      line: e.number || e.category, category: e.category, to: e.to, live: !!prog || e.stop.delay != null,
+      planned, real: prog || planned + delay * 60000, delay: prog ? Math.round((prog - planned) / 60000) : delay
+    };
+  });
+}
+
+function sampleData() {
+  const now = Date.now(), m = 60000;
+  return [["4","T","Zürich, Bahnhof Altstetten",0,0],["3","T","Zürich, Albisrieden",2,0],["6","T","Zürich, Zoo",4,0],
+    ["46","B","Zürich, Rütihof",6,4],["7","T","Zürich, Wollishofen",8,0],["10","T","Zürich Flughafen, Bahnhof",9,0],
+    ["15","T","Zürich, Bucheggplatz",13,0],["31","B","Zürich, Hegibachplatz",17,0]]
+    .map(([line,category,to,min,delay]) => ({ line, category, to, live: min < 15, planned: now + min*m + 20000, real: now + (min+delay)*m + 20000, delay }));
+}
+
+async function refresh() {
+  await Promise.all(config.stops.map(async s => {
+    try { boards[s.id] = { list: await fetchStop(s), fetchedAt: Date.now(), sample: false }; }
+    catch (e) { boards[s.id] = { list: sampleData(), fetchedAt: Date.now(), sample: true }; }
+  }));
+  render();
+}
+
+function visible(stop, now) {
+  const b = boards[stop.id]; if (!b) return null;
+  const wanted = stop.lines.split(/[,\s]+/).filter(Boolean);
+  const dest = stop.dest.trim().toLowerCase();
+  return b.list
+    .filter(d => !wanted.length || wanted.includes(String(d.line)))
+    .filter(d => !dest || d.to.toLowerCase().includes(dest))
+    .filter(d => d.real - now > -30000)
+    // With a walking time set, drop what you can no longer reach.
+    .filter(d => !stop.walk || (d.real - now) / 60000 >= stop.walk)
+    .sort((a, b) => a.real - b.real)
+    .slice(0, stop.limit);
+}
+
+function lineCell(d) {
+  const c = d.category === "T" && LINE_COLORS[d.line];
+  const style = c ? `background:${c[0]};color:${c[1]};text-shadow:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)` : "";
+  return `<span class="line" style="${style}">${esc(d.line)}</span>`;
+}
+
+function rowHtml(d, now) {
+  const m = Math.floor((d.real - now) / 60000);
+  let min;
+  if (m < 1) min = `<span class="blink">${TRAM_ICON}</span>`;
+  else if (m > 59) min = hhmm(d.real);
+  else min = m;
+  const late = d.delay >= 3 ? "&gt;" : "";
+  // VBZ marks live times with a heavy tick and timetable times with a light one.
+  const tick = m >= 1 && m <= 59 ? `<span class="tick ${d.live ? "" : "sched"}">'</span>` : `<span class="tick"></span>`;
+  return `<div class="l">${lineCell(d)}<span class="dest">${esc(shortName(d.to))}</span><span class="late">${late}</span><span class="min">${min}</span>${tick}</div>`;
+}
+
+function boardHtml(stop, now) {
+  const list = visible(stop, now);
+  let rows;
+  if (!list) rows = `<div class="msg">Loading…</div>`;
+  else if (!list.length) rows = `<div class="msg">No departures match your filters</div>`;
+  else rows = list.map(d => rowHtml(d, now)).join("");
+  let foot = "";
+  if (stop.walk && list && list.length) {
+    const go = Math.floor((list[0].real - now) / 60000) - stop.walk;
+    foot = `<div class="foot"><span>${stop.walk} min walk</span><span class="go">${go <= 0 ? "Leave now" : `Leave in ${go} min`}</span></div>`;
+  }
+  return `<section class="device"><div class="screen ${config.classic ? "classic" : ""}">
+    <div class="head"><span>${esc(shortName(stop.name))}</span><span>${hhmm(now)}</span></div>
+    ${rows}${foot}</div></section>`;
+}
+
+function render() {
+  const now = Date.now();
+  const anySample = Object.values(boards).some(b => b.sample);
+  const note = document.getElementById("note");
+  note.hidden = !anySample;
+  note.textContent = anySample ? "Sample departures. This view can't reach the live timetable. Open the downloaded index.html in your browser for live data." : "";
+  const html = config.stops.map(s => boardHtml(s, now)).join("") || `<p>No stops yet. Use “Stops & filters” to add one.</p>`;
+  if (html !== lastHtml) { document.getElementById("boards").innerHTML = html; lastHtml = html; }
+  const ages = Object.values(boards).map(b => b.fetchedAt);
+  document.getElementById("status").textContent = ages.length
+    ? (anySample ? "Showing sample data" : `Live · updated ${Math.round((now - Math.min(...ages)) / 1000)}s ago`) : "Loading…";
+}
+
+// ---- settings ----
+const dlg = document.getElementById("dlg");
+function renderCfg() {
+  document.getElementById("opt-classic").checked = !!config.classic;
+  document.getElementById("cfg-list").innerHTML = config.stops.map((s, i) => `
+    <div class="section" data-i="${i}">
+      <div class="top"><strong>${esc(s.name)}</strong>
+        <span>${i > 0 ? `<button type="button" data-act="up">Move up</button> ` : ""}<button type="button" data-act="del">Remove</button></span></div>
+      <div class="checks">${TYPES.map(([k, l]) => `<label><input type="checkbox" id="t-${i}-${k}" data-f="type" value="${k}" ${s.types.includes(k) ? "checked" : ""}>${l}</label>`).join("")}</div>
+      <div class="grid2">
+        <label for="l-${i}">Only these lines<input id="l-${i}" data-f="lines" value="${esc(s.lines)}" placeholder="All lines, or e.g. 4, 15"></label>
+        <label for="d-${i}">Destination contains<input id="d-${i}" data-f="dest" value="${esc(s.dest)}" placeholder="e.g. Altstetten"></label>
+        <label for="w-${i}">Walk to stop (min)<input id="w-${i}" data-f="walk" type="number" min="0" max="60" value="${s.walk}"></label>
+        <label for="n-${i}">Rows<input id="n-${i}" data-f="limit" type="number" min="1" max="12" value="${s.limit}"></label>
+      </div>
+    </div>`).join("");
+}
+document.getElementById("opt-classic").addEventListener("change", e => { config.classic = e.target.checked; save(); render(); });
+document.getElementById("cfg-list").addEventListener("input", e => {
+  const box = e.target.closest(".section"); if (!box) return;
+  const s = config.stops[+box.dataset.i], f = e.target.dataset.f;
+  if (f === "type") s.types = [...box.querySelectorAll('[data-f="type"]:checked')].map(x => x.value);
+  else if (f === "walk" || f === "limit") s[f] = Math.max(f === "limit" ? 1 : 0, parseInt(e.target.value, 10) || 0);
+  else s[f] = e.target.value;
+  save(); render();
+});
+document.getElementById("cfg-list").addEventListener("change", e => { if (e.target.dataset.f === "type") refresh(); });
+document.getElementById("cfg-list").addEventListener("click", e => {
+  const act = e.target.dataset.act; if (!act) return;
+  const i = +e.target.closest(".section").dataset.i;
+  if (act === "del") config.stops.splice(i, 1);
+  if (act === "up" && i > 0) [config.stops[i - 1], config.stops[i]] = [config.stops[i], config.stops[i - 1]];
+  save(); renderCfg(); refresh();
+});
+let qTimer;
+document.getElementById("q").addEventListener("input", e => {
+  clearTimeout(qTimer);
+  const q = e.target.value.trim(), out = document.getElementById("results");
+  if (q.length < 2) { out.innerHTML = ""; return; }
+  qTimer = setTimeout(async () => {
+    try {
+      const r = await fetch(`${API}/locations?type=station&query=${encodeURIComponent(q)}`);
+      const j = await r.json();
+      out.innerHTML = (j.stations || []).filter(s => s.id).slice(0, 6)
+        .map(s => `<button type="button" data-id="${esc(s.id)}" data-name="${esc(s.name)}">+ ${esc(s.name)}</button>`).join("") || `<span>No stop found.</span>`;
+    } catch (err) { out.innerHTML = `<span class="note">Stop search needs the live timetable, which this view can't reach.</span>`; }
+  }, 250);
+});
+document.getElementById("results").addEventListener("click", e => {
+  const b = e.target.closest("button[data-id]"); if (!b) return;
+  config.stops.push({ id: b.dataset.id, name: b.dataset.name, types: ["tram","bus"], lines: "", dest: "", walk: 0, limit: 6 });
+  document.getElementById("q").value = ""; document.getElementById("results").innerHTML = "";
+  save(); renderCfg(); refresh();
+});
+document.getElementById("btn-settings").onclick = () => { renderCfg(); dlg.showModal(); };
+
+// Full screen: black surround, bigger board, screen kept awake where allowed. Tap the board to exit.
+let wake = null;
+document.getElementById("btn-kiosk").onclick = async () => {
+  document.body.classList.add("kiosk");
+  try { await document.documentElement.requestFullscreen(); } catch (e) {}
+  try { wake = await navigator.wakeLock.request("screen"); } catch (e) {}
+};
+document.getElementById("boards").onclick = () => {
+  if (!document.body.classList.contains("kiosk")) return;
+  document.body.classList.remove("kiosk");
+  try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
+  try { wake && wake.release(); } catch (e) {}
+};
+
+// When hosted, reload by itself as soon as a new build is published (version.json next to this file).
+const BUILD = "2026-09-27.3";
+setInterval(async () => {
+  try {
+    const v = await (await fetch(`version.json?t=${Date.now()}`, { cache: "no-store" })).json();
+    if (v.build && v.build !== BUILD) location.reload();
+  } catch (e) {}
+}, 60000);
+
+render(); refresh();
+setInterval(render, 1000);
+setInterval(refresh, 30000);
+</script>

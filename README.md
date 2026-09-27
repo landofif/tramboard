@@ -21,7 +21,7 @@ Live at **https://landofif.github.io/tramboard/**
 2. Add a Scriptable widget to your Home Screen or Lock Screen and choose the script.
 3. Set the widget's Parameter to your stop ids, for example `8591066,8591323`. Optional: `walk=3` and `lines=33+46`.
 
-iOS decides how often widgets refresh (usually every 5 to 15 minutes). The countdowns keep ticking between refreshes.
+Times are shown in whole minutes, like the stop displays. The widget asks iOS to redraw every minute, but iOS decides how often widgets actually refresh, so each board shows the time of its last update.
 
 ## Publishing
 

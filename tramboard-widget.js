@@ -77,15 +77,17 @@ function lineBadge(stack, d, size) {
   t.minimumScaleFactor = 0.6;
 }
 
-function minutesText(stack, d, size) {
+// Whole minutes like the stop displays: 1', 2', 3'. The widget is only as fresh as its last redraw,
+// so the board header shows when that was.
+function minutesLabel(d) {
   const mins = Math.floor((d.real - Date.now()) / 60000);
-  let t;
-  if (mins > 59) t = stack.addText(hhmm(new Date(d.real)));
-  else {
-    // A timer counts down by itself between refreshes, so the minutes stay right even though iOS only redraws every few minutes.
-    t = stack.addDate(new Date(d.real));
-    t.applyTimerStyle();
-  }
+  if (mins > 59) return hhmm(new Date(d.real));
+  if (mins < 1) return "0'";
+  return `${mins}'`;
+}
+
+function minutesText(stack, d, size) {
+  const t = stack.addText(minutesLabel(d));
   t.font = Font.heavyMonospacedSystemFont(size);
   t.textColor = AMBER;
   t.rightAlignText();
@@ -99,6 +101,9 @@ function addBoard(w, board, rows, size) {
   name.textColor = AMBER_DIM;
   name.lineLimit = 1;
   head.addSpacer();
+  const stamp = head.addText(hhmm(new Date()));
+  stamp.font = Font.boldMonospacedSystemFont(size * 0.62);
+  stamp.textColor = AMBER_DIM;
   w.addSpacer(3);
   if (!board.list.length) {
     const t = w.addText("Keine Abfahrten");
@@ -141,8 +146,7 @@ function addLockScreen(w, board) {
     t.font = Font.semiboldSystemFont(13);
     t.lineLimit = 1;
     row.addSpacer();
-    const time = row.addDate(new Date(x.real));
-    time.applyTimerStyle();
+    const time = row.addText(minutesLabel(x));
     time.font = Font.semiboldMonospacedSystemFont(13);
     time.rightAlignText();
   });
@@ -158,9 +162,10 @@ async function build() {
   } catch (e) {
     boards = null;
   }
-  // Redraw soon after the next departure leaves, and at least every 5 minutes.
-  const next = boards ? Math.min(...boards.flatMap(b => b.list.map(d => d.real)), Date.now() + 5 * 60000) : Date.now() + 5 * 60000;
-  w.refreshAfterDate = new Date(Math.max(next + 30000, Date.now() + 60000));
+  // Ask for a redraw at the next full minute so the minutes tick over. iOS treats this as a wish
+  // and may wait longer, which is why the header shows the time of the last update.
+  const nextMinute = new Date(); nextMinute.setSeconds(0, 0); nextMinute.setMinutes(nextMinute.getMinutes() + 1);
+  w.refreshAfterDate = nextMinute;
   w.url = "https://landofif.github.io/tramboard/";
 
   if (lock) {

@@ -186,6 +186,7 @@
         <li>Install the free app <b>Scriptable</b> from the App Store.</li>
         <li>On your iPhone, tap <b>Copy widget script</b> below, then in Scriptable tap <b>+</b>, paste, and name it Tramboard.</li>
         <li>Add a Scriptable widget to your Home Screen, long-press it, tap <b>Edit Widget</b>, pick the Tramboard script, and set <b>Parameter</b> to <code id="widget-param">8591066,8591323</code>.</li>
+        <li>Optional: to make it blend into your wallpaper, screenshot an empty Home Screen page, crop it in Photos to where the widget sits, then run the script in Scriptable and choose <b>Set background from photo</b>. Without a photo it follows light and dark mode.</li>
       </ol>
       <div class="row"><button type="button" id="btn-copy-widget">Copy widget script</button><a href="tramboard-widget.js" target="_blank" rel="noopener">View script</a></div>
     </div>
@@ -536,7 +537,7 @@ document.getElementById("boards").onclick = () => {
 };
 
 // When hosted, reload by itself as soon as a new build is published (version.json next to this file).
-const BUILD = "2026-09-27.5";
+const BUILD = "2026-09-27.6";
 setInterval(async () => {
   if (importPending || dlg.open) return;
   try {

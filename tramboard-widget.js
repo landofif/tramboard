@@ -205,30 +205,84 @@ async function build() {
   return w;
 }
 
-// Run inside the Scriptable app: a small menu to preview or to set the background.
-// For a see-through look: take a screenshot of an empty Home Screen page, crop it in Photos to exactly
-// where the widget sits, then choose "Set background from photo" and pick that cropped image.
-async function menu() {
+// Widget positions on the Home Screen, in screenshot pixels, keyed by screenshot height.
+// These are the widely used values from the Scriptable community's transparent-widget scripts.
+// Home Screens with large icons or a different layout may be off by a little; the manual crop always works.
+const HOME_LAYOUTS = {
+  2532: { small: 474, medium: 1014, large: 1062, left: 78, right: 618, top: 231, middle: 819, bottom: 1407 }, // iPhone 12, 12 Pro, 13, 13 Pro, 14
+  2778: { small: 510, medium: 1092, large: 1146, left: 96, right: 678, top: 246, middle: 882, bottom: 1518 }, // 12 Pro Max, 13 Pro Max, 14 Plus
+  2340: { small: 436, medium: 936, large: 980, left: 72, right: 570, top: 212, middle: 756, bottom: 1300 }, // 12 mini, 13 mini
+  2556: { small: 474, medium: 1017, large: 1062, left: 82, right: 622, top: 270, middle: 858, bottom: 1446 }, // 14 Pro, 15, 15 Pro
+  2796: { small: 510, medium: 1092, large: 1146, left: 99, right: 681, top: 282, middle: 918, bottom: 1554 } // 14 Pro Max, 15 Plus, 15 Pro Max
+};
+
+async function choose(title, message, options) {
   const a = new Alert();
-  a.title = "Tramboard";
-  a.message = BG_IMAGE ? "The widget uses your background image." : "The widget follows light and dark mode.";
-  a.addAction("Preview widget");
-  a.addAction("Set background from photo");
-  if (BG_IMAGE) a.addDestructiveAction("Remove background");
-  a.addCancelAction("Close");
-  const choice = await a.presentSheet();
-  if (choice === 1) {
-    const img = await Photos.fromLibrary();
-    fm.writeImage(BG_PATH, img);
-    const ok = new Alert();
-    ok.title = "Background saved";
-    ok.message = "The widget uses it from its next update. Run the script again to preview it.";
-    ok.addAction("OK");
-    await ok.present();
+  a.title = title;
+  if (message) a.message = message;
+  options.forEach(o => a.addAction(o));
+  a.addCancelAction("Cancel");
+  const i = await a.presentSheet();
+  return i < 0 ? null : options[i];
+}
+
+async function notify(title, message) {
+  const a = new Alert();
+  a.title = title;
+  a.message = message;
+  a.addAction("OK");
+  await a.present();
+}
+
+function crop(img, x, y, w, h) {
+  const d = new DrawContext();
+  d.size = new Size(w, h);
+  d.opaque = true;
+  d.drawImageAtPoint(img, new Point(-x, -y));
+  return d.getImage();
+}
+
+// Cuts the piece of a Home Screen screenshot that sits behind the widget, so the widget looks see-through.
+async function backgroundFromScreenshot() {
+  await notify("Screenshot first",
+    "Go to an empty Home Screen page (enter jiggle mode and swipe to the last page), take a screenshot, then come back and pick it.");
+  const img = await Photos.fromLibrary();
+  const L = HOME_LAYOUTS[Math.round(img.size.height)];
+  if (!L) {
+    await notify("Unknown screen size",
+      "This iPhone's layout isn't in the list yet. Crop the screenshot in Photos to where the widget sits and use \"Set background from cropped photo\" instead.");
+    return;
+  }
+  const size = await choose("Widget size", "Which size is the widget?", ["Small", "Medium", "Large"]);
+  if (!size) return;
+  const positions = {
+    Small: ["Top left", "Top right", "Middle left", "Middle right", "Bottom left", "Bottom right"],
+    Medium: ["Top", "Middle", "Bottom"],
+    Large: ["Top", "Bottom"]
+  }[size];
+  const pos = await choose("Widget position", "Where on the Home Screen is it?", positions);
+  if (!pos) return;
+  const row = pos.startsWith("Top") ? "top" : pos.startsWith("Middle") ? "middle" : "bottom";
+  let x = L.left, y = L[row], w = L.medium, h = L.small;
+  if (size === "Small") { w = L.small; x = pos.endsWith("right") ? L.right : L.left; }
+  if (size === "Large") { h = L.large; y = pos === "Top" ? L.top : L.middle; }
+  fm.writeImage(BG_PATH, crop(img, x, y, w, h));
+  await notify("Background saved", "The widget uses it from its next update. If it looks shifted, use the manual crop instead.");
+}
+
+// Run inside the Scriptable app: a small menu to preview or to set the background.
+async function menu() {
+  const options = ["Preview widget", "Make see-through (from screenshot)", "Set background from cropped photo"];
+  if (BG_IMAGE) options.push("Remove background");
+  const choice = await choose("Tramboard", BG_IMAGE ? "The widget uses your background image." : "The widget follows light and dark mode.", options);
+  if (choice === "Make see-through (from screenshot)") { await backgroundFromScreenshot(); return false; }
+  if (choice === "Set background from cropped photo") {
+    fm.writeImage(BG_PATH, await Photos.fromLibrary());
+    await notify("Background saved", "The widget uses it from its next update.");
     return false;
   }
-  if (choice === 2 && BG_IMAGE) { fm.remove(BG_PATH); return false; }
-  return choice === 0;
+  if (choice === "Remove background") { fm.remove(BG_PATH); return false; }
+  return choice === "Preview widget";
 }
 
 if (config.runsInWidget) {

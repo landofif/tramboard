@@ -21,7 +21,7 @@ Live at **https://landofif.github.io/tramboard/**
 2. Add a Scriptable widget to your Home Screen or Lock Screen and choose the script.
 3. Set the widget's Parameter to your stop ids, for example `8591066,8591323`. Optional: `walk=3` and `lines=33+46`.
 
-The widget follows light and dark mode. To make it blend into your wallpaper, screenshot an empty Home Screen page, crop it in Photos to where the widget sits, run the script in Scriptable and choose **Set background from photo**.
+The widget follows light and dark mode. To make it see-through, screenshot an empty Home Screen page, run the script in Scriptable, choose **Make see-through**, pick the screenshot and say where the widget sits. It cuts out the matching piece of your wallpaper (supported: iPhone 12 to 15 screen sizes; other models can crop by hand and use **Set background from cropped photo**).
 
 Times are shown in whole minutes, like the stop displays. The widget asks iOS to redraw every minute, but iOS decides how often widgets actually refresh, so each board shows the time of its last update.
 
